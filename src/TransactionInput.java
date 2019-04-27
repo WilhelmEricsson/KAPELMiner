@@ -68,45 +68,51 @@ public class TransactionInput {
     private static List<List<Event>> readEventTransactions(String file) {
         Path path = Paths.get(file);
         try {
-            List<List<Event>> transactions = new ArrayList<>();
             List<String> lines = Files.readAllLines(path);
-            for (String line : lines) {
-                List<Event> transaction = new ArrayList<>();
-                String[] events = line.trim().split("\\s+");
-                for (String event : events) {
-                    String[] split = event.split(",");
-                    transaction.add(new Event(Integer.parseInt(split[0]), Integer.parseInt(split[1])));
-                }
-                transactions.add(transaction);
-            }
-            return transactions;
+            return readEventTransactions(lines);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
         return null;
     }
-    private static List<List<Event>> readSimpleEventTransactions(String file) {
+    private static List<List<Event>> readEventTransactions(List<String> lines) {
+        List<List<Event>> transactions = new ArrayList<>();
+        for (String line : lines) {
+            List<Event> transaction = new ArrayList<>();
+            String[] events = line.trim().split("\\s+");
+            for (String event : events) {
+                String[] split = event.split(",");
+                transaction.add(new Event(Integer.parseInt(split[0]), Integer.parseInt(split[1])));
+            }
+            transactions.add(transaction);
+        }
+        return transactions;
+    }
 
+    private static List<List<Event>> readSimpleEventTransactions(String file) {
         Path path = Paths.get(file);
         try {
-            List<List<Event>> transactions = new ArrayList<>();
             List<String> lines = Files.readAllLines(path);
-            for (String line : lines) {
-                List<Event> transaction = new ArrayList<>();
-                String[] events = line.trim().split("\\s+");
-                for (int i = 0; i < events.length; i++) {
-                    String event = events[i];
-                    transaction.add(new Event(Integer.parseInt(event), i));
-                }
-                transactions.add(transaction);
-            }
-            return transactions;
+            return readSimpleEventTransactions(lines);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
         return null;
+    }
+    private static List<List<Event>> readSimpleEventTransactions(List<String> lines) {
+        List<List<Event>> transactions = new ArrayList<>();
+        for (String line : lines) {
+            List<Event> transaction = new ArrayList<>();
+            String[] events = line.trim().split("\\s+");
+            for (int i = 0; i < events.length; i++) {
+                String event = events[i];
+                transaction.add(new Event(Integer.parseInt(event), i));
+            }
+            transactions.add(transaction);
+        }
+        return transactions;
     }
 
     /**
