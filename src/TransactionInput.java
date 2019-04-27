@@ -109,6 +109,57 @@ public class TransactionInput {
         return null;
     }
 
+    /**
+     *
+     * @param filePath
+     * @param numOfPartitions
+     * @return HashMap of partitions or null if filePath is an invalid filepath
+     */
+    public static HashMap<Integer,List<String>> partitionTransactions(String filePath, int numOfPartitions){
+        Path path = Paths.get(filePath);
+        HashMap<Integer, List<String>> partitions = null;
+        try {
+            List<String> lines = Files.readAllLines(path);
+
+            partitions = new HashMap<>();
+            int numOfTransactions = lines.size();
+            int partSize = numOfTransactions/numOfPartitions;
+            int count = 0;
+            int partition = 0;
+            partitions.put(partition,new ArrayList<>());
+
+            /*Adds a transaction to a partition until count is equal to partition size, then resets count goes on to the next partition, this is done as long as the partition
+              is not the last partition which gets the remainder of the transactions.
+             */
+            for(String line: lines){
+                partitions.get(partition).add(line);
+                count++;
+                if(partition < numOfPartitions-1 && count == partSize){
+                    count = 0;
+                    partition++;
+                    partitions.put(partition,new ArrayList<>());
+                }
+            }
+
+            //Temp, vill bara se hur det förhåller sig
+            printPartitions(partitions, numOfPartitions, numOfTransactions, partSize);
+
+        }catch(IOException ioe){
+            ioe.printStackTrace();
+        }
+        return  partitions;
+     }
+     private static void printPartitions(HashMap<Integer, List<String>> partitions, int numOfPartitions,int numOfTransactions, int partSize){
+         System.out.println("mod: " + numOfTransactions%numOfPartitions + " div: " + partSize);
+         int TEMP_COUNTER = 0;
+         System.out.println("Partitions\tSize");
+         for(int i = 0 ; i < numOfPartitions; i++){
+             System.out.printf("%d\t\t%d%n", i, partitions.get(i).size());
+             TEMP_COUNTER += partitions.get(i).size();
+         }
+         System.out.println("Expected size: " + numOfTransactions + " Size: " + TEMP_COUNTER);
+     }
+
     private static class Event {
         int value;
         int time;
