@@ -5,7 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
-import java.util.stream.Collectors;
+
 
 
 import org.apache.commons.cli.*;
@@ -20,7 +20,7 @@ import com.carrotsearch.hppc.IntObjectOpenHashMap;
 
 public class KAPMiner {
     private static class Rule {
-        private final ItemSet x, y;
+        private final Itemset x, y;
         private final double support, supportRatio, confidence, lift;
 
         public Rule(RuleWithTransactions rule) {
@@ -32,11 +32,11 @@ public class KAPMiner {
             this.lift = rule.getLift();
         }
 
-        public ItemSet getX() {
+        public Itemset getX() {
             return x;
         }
 
-        public ItemSet getY() {
+        public Itemset getY() {
             return y;
         }
 
@@ -60,12 +60,12 @@ public class KAPMiner {
     private static class RuleWithTransactions {
 
         private final BitSet transactions;
-        private final ItemSet x, y;
+        private final Itemset x, y;
 
         private final double support, supportRatio, ORconf;
         private final double lift;
 
-        public RuleWithTransactions(ItemSet x, ItemSet y, BitSet transactions, double ruleSup,
+        public RuleWithTransactions(Itemset x, Itemset y, BitSet transactions, double ruleSup,
                                     double supportRatio, double confidence, double lift) {
             this.x = x;
             this.y = y;
@@ -129,89 +129,11 @@ public class KAPMiner {
     }
 
 
-    private static class ItemSet {
-
-        private final int[] items;
-        private double support;
-
-        private ItemSet(int[] items) {
-            this.items = items;
-        }
-
-        public int get(int i) {
-            return items[i];
-        }
-
-        public int size() {
-            return items.length;
-        }
-
-        public boolean prefixMatch(ItemSet other, int prefixSize) {
-            // assume sorted and both have size < prefixSize
-            for (int i = 0; i < prefixSize; i++) {
-                if (items[i] != other.items[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        public boolean contains(ItemSet other) {
-            int i = 0, j = 0;
-            while (i < other.items.length && j < this.items.length) {
-                if (this.items[j] < other.items[i]) {
-                    j++;
-                } else if (this.items[j] == other.items[i]) {
-                    j++;
-                    i++;
-                } else if (this.items[j] > other.items[i]) {
-                    return false;
-                }
-            }
-            return i >= other.items.length;
-        }
-
-        public ItemSet merge(ItemSet b, int prefixSize) {
-            int[] union = new int[this.items.length + 1];
-            System.arraycopy(this.items, 0, union, 0, prefixSize);
-            if (this.items[prefixSize] < b.items[prefixSize]) {
-                union[prefixSize] = this.items[prefixSize];
-                union[prefixSize + 1] = b.items[prefixSize];
-            } else {
-                union[prefixSize] = b.items[prefixSize];
-                union[prefixSize + 1] = this.items[prefixSize];
-            }
-            return new ItemSet(union);
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o)
-                return true;
-            if (o == null || getClass() != o.getClass())
-                return false;
-
-            ItemSet other = (ItemSet) o;
-            return Arrays.equals(items, other.items);
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(items);
-        }
-
-        @Override
-        public String toString() {
-            return "{" + Arrays.stream(items).mapToObj(Integer::toString).collect(Collectors.joining(","))
-                    + "}";
-        }
-    }
-
     private static class ItemsetWithTransactions {
-        private ItemSet itemSet;
+        private Itemset itemSet;
         private final BitSet transactions;
 
-        public ItemsetWithTransactions(ItemSet item, BitSet transactions) {
+        public ItemsetWithTransactions(Itemset item, BitSet transactions) {
             this.itemSet = item;
             this.transactions = transactions;
         }
@@ -224,7 +146,7 @@ public class KAPMiner {
             return transactions;
         }
 
-        public ItemSet getItemSet() {
+        public Itemset getItemSet() {
             return itemSet;
         }
 
@@ -325,7 +247,7 @@ public class KAPMiner {
 
     private static List<Rule> findFrequent(TransactionInput transactionInput, double minSup,
                                            double minSupRatio, int orderConstraint, double minConf) {
-        Map<ItemSet, Double> supports = new HashMap<>();
+        Map<Itemset, Double> supports = new HashMap<>();
         IntObjectMap<ItemPosition> itemPositionMap = transactionInput.itemPositions;
         double noTransactions = transactionInput.getTransactions();
 
@@ -333,7 +255,7 @@ public class KAPMiner {
         List<ItemsetWithTransactions> currentLevel = new ArrayList<>();
         for (Map.Entry<Integer, BitSet> kv : transactionInput.getItemSets().entrySet()) {
             if (kv.getValue().cardinality() / noTransactions >= minSup) {
-                ItemSet item = new ItemSet(new int[] {kv.getKey()});
+                Itemset item = new Itemset(new int[] {kv.getKey()});
                 currentLevel.add(new ItemsetWithTransactions(item, kv.getValue()));
                 supports.put(item, kv.getValue().cardinality() / noTransactions);
             }
@@ -342,8 +264,8 @@ public class KAPMiner {
         List<Rule> outputRules = new ArrayList<>();
         List<ItemsetWithTransactions> nextLevel = new ArrayList<>();
 
-        Map<ItemSet, List<RuleWithTransactions>> currentLevelMap = new HashMap<>();
-        Map<ItemSet, List<RuleWithTransactions>> prevLevelMap = new HashMap<>();
+        Map<Itemset, List<RuleWithTransactions>> currentLevelMap = new HashMap<>();
+        Map<Itemset, List<RuleWithTransactions>> prevLevelMap = new HashMap<>();
 
         int level = 1;
         while (true) {
@@ -360,8 +282,8 @@ public class KAPMiner {
                             continue;
 
                         double itemsetSup = intersectingTransactions.cardinality() / noTransactions;
-                        ItemSet newItemSet = iItem.getItemSet().merge(jItem.getItemSet(), level - 1);
-                        supports.put(newItemSet, itemsetSup);
+                        Itemset newItemset = iItem.getItemSet().merge(jItem.getItemSet(), level - 1);
+                        supports.put(newItemset, itemsetSup);
 
                         matches.clear();
                         List<RuleWithTransactions> iItemRules = prevLevelMap.get(iItem.getItemSet());
@@ -374,24 +296,24 @@ public class KAPMiner {
                         }
                         List<RuleWithTransactions> rules = new ArrayList<>();
                         if (level > 1) {
-                            int[] tmpItemSet = new int[newItemSet.size() - 1];
-                            for (int k = newItemSet.size() - 3; k >= 0; k--) {
+                            int[] tmpItemSet = new int[newItemset.size() - 1];
+                            for (int k = newItemset.size() - 3; k >= 0; k--) {
                                 int tmpCnt = 0;
-                                for (int l = 0; l < newItemSet.size(); l++) {
+                                for (int l = 0; l < newItemset.size(); l++) {
                                     if (k != l) {
-                                        tmpItemSet[tmpCnt++] = newItemSet.get(l);
+                                        tmpItemSet[tmpCnt++] = newItemset.get(l);
                                     }
                                 }
 
                                 List<RuleWithTransactions> ruleWithTransactions =
-                                        prevLevelMap.get(new ItemSet(tmpItemSet));
+                                        prevLevelMap.get(new Itemset(tmpItemSet));
                                 if (ruleWithTransactions != null) {
                                     matches.addAll(ruleWithTransactions);
                                 }
                             }
 
-                            Set<ItemSet> usedX = new HashSet<>();
-                            Set<ItemSet> usedY = new HashSet<>();
+                            Set<Itemset> usedX = new HashSet<>();
+                            Set<Itemset> usedY = new HashSet<>();
                             for (int k = 0; k < matches.size(); k++) {
                                 List<RuleWithTransactions> xs = new ArrayList<>();
                                 List<RuleWithTransactions> ys = new ArrayList<>();
@@ -434,7 +356,7 @@ public class KAPMiner {
                                     if (ruleSup >= minSup) {
                                         double supportRatio =
                                                 inter.cardinality() / (double) intersectingTransactions.cardinality();
-                                        ItemSet mergedAntecedent = mergeAntecedents(xs, xs.size() - 1);
+                                        Itemset mergedAntecedent = mergeAntecedents(xs, xs.size() - 1);
                                         if (usedY.contains(mergedAntecedent)) {
                                             continue;
                                         }
@@ -461,7 +383,7 @@ public class KAPMiner {
                                     if (ruleSup >= minSup) {
                                         double supportRatio =
                                                 inter.cardinality() / (double) intersectingTransactions.cardinality();
-                                        ItemSet mergeConsequents = mergeConsequents(ys, ys.size() - 1);
+                                        Itemset mergeConsequents = mergeConsequents(ys, ys.size() - 1);
                                         if (usedX.contains(mergeConsequents)) {
                                             continue;
                                         }
@@ -517,8 +439,8 @@ public class KAPMiner {
                             }
                         }
 
-                        nextLevel.add(new ItemsetWithTransactions(newItemSet, intersectingTransactions));
-                        currentLevelMap.put(newItemSet, rules);
+                        nextLevel.add(new ItemsetWithTransactions(newItemset, intersectingTransactions));
+                        currentLevelMap.put(newItemset, rules);
                     } else {
                         break;
                     }
@@ -532,7 +454,7 @@ public class KAPMiner {
                 nextLevel = tmp;
 
                 prevLevelMap.clear();
-                Map<ItemSet, List<RuleWithTransactions>> tmpMap = prevLevelMap;
+                Map<Itemset, List<RuleWithTransactions>> tmpMap = prevLevelMap;
                 prevLevelMap = currentLevelMap;
                 currentLevelMap = tmpMap;
 
@@ -562,7 +484,7 @@ public class KAPMiner {
         return beforeIntersection;
     }
 
-    private static ItemSet mergeAntecedents(List<RuleWithTransactions> consequents, int size) {
+    private static Itemset mergeAntecedents(List<RuleWithTransactions> consequents, int size) {
         int[] union = new int[size + 1];
         Arrays.fill(union, Integer.MAX_VALUE);
         for (int i = 0; i < size; i++) {
@@ -575,10 +497,10 @@ public class KAPMiner {
             }
 
         }
-        return new ItemSet(union);
+        return new Itemset(union);
     }
 
-    private static ItemSet mergeConsequents(List<RuleWithTransactions> antecedents, int size) {
+    private static Itemset mergeConsequents(List<RuleWithTransactions> antecedents, int size) {
         int[] union = new int[size + 1];
         // Arrays.fill(union, Integer.MAX_VALUE);
         for (int i = 0; i < size; i++) {
@@ -591,7 +513,7 @@ public class KAPMiner {
             }
 
         }
-        return new ItemSet(union);
+        return new Itemset(union);
     }
 
 
