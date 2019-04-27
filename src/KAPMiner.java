@@ -24,10 +24,10 @@ public class KAPMiner {
         private final double support, supportRatio, confidence, lift;
 
         public Rule(RuleWithTransactions rule) {
-            this.x = rule.x;
-            this.y = rule.y;
-            this.support = rule.support;
-            this.supportRatio = rule.supportRatio;
+            this.x = rule.getX();
+            this.y = rule.getY();
+            this.support = rule.getSupport();
+            this.supportRatio = rule.getSupportRatio();
             this.confidence = rule.getORconf();
             this.lift = rule.getLift();
         }
@@ -57,50 +57,7 @@ public class KAPMiner {
         }
     }
 
-    private static class RuleWithTransactions {
 
-        private final BitSet transactions;
-        private final Itemset x, y;
-
-        private final double support, supportRatio, ORconf;
-        private final double lift;
-
-        public RuleWithTransactions(Itemset x, Itemset y, BitSet transactions, double ruleSup,
-                                    double supportRatio, double confidence, double lift) {
-            this.x = x;
-            this.y = y;
-            this.transactions = transactions;
-            this.ORconf = confidence;
-            this.support = ruleSup;
-            this.supportRatio = supportRatio;
-            this.lift = lift;
-        }
-
-        public double getSupport() {
-            return support;
-        }
-
-        public double getSupportRatio() {
-            return supportRatio;
-        }
-
-        public double getORconf() {
-            return ORconf;
-        }
-
-        public double getLift() {
-            return lift;
-        }
-
-        public double frequency() {
-            return transactions.cardinality();
-        }
-
-        @Override
-        public String toString() {
-            return "{<" + x + " => " + y + "> freq: " + transactions + "}";
-        }
-    }
 
 
     private static class ItemsetWithTransactions {
@@ -293,37 +250,37 @@ public class KAPMiner {
                                 List<RuleWithTransactions> ys = new ArrayList<>();
 
                                 RuleWithTransactions r = matches.get(k);
-                                boolean checkedX = usedX.contains(r.x);
-                                boolean checkedY = usedY.contains(r.y);
+                                boolean checkedX = usedX.contains(r.getX());
+                                boolean checkedY = usedY.contains(r.getY());
 
 
                                 if (!checkedX) {
                                     xs.add(r);
-                                    usedX.add(r.x);
+                                    usedX.add(r.getX());
                                 }
 
                                 if (!checkedY) {
                                     ys.add(r);
-                                    usedY.add(r.y);
+                                    usedY.add(r.getY());
                                 }
 
                                 for (int l = k + 1; l < matches.size(); l++) {
                                     RuleWithTransactions o = matches.get(l);
-                                    if (!checkedX && o.x.equals(r.x)) {
+                                    if (!checkedX && o.getX().equals(r.getX())) {
                                         xs.add(o);
                                     }
-                                    if (!checkedY && o.y.equals(r.y)) {
+                                    if (!checkedY && o.getY().equals(r.getY())) {
                                         ys.add(o);
                                     }
                                 }
 
                                 // If the number of itemsets to merge for the y
-                                if (xs.size() == level + 1 - r.x.size()) {
+                                if (xs.size() == level + 1 - r.getX().size()) {
                                     BitSet inter = new BitSet();
-                                    inter.or(xs.get(0).transactions);
+                                    inter.or(xs.get(0).getTransactions());
                                     for (int i1 = 1; i1 < xs.size(); i1++) {
                                         RuleWithTransactions rule = xs.get(i1);
-                                        inter.and(rule.transactions);
+                                        inter.and(rule.getTransactions());
                                     }
 
                                     double ruleSup = inter.cardinality() / noTransactions;
@@ -334,9 +291,9 @@ public class KAPMiner {
                                         if (usedY.contains(mergedAntecedent)) {
                                             continue;
                                         }
-                                        double confidence = ruleSup / supports.get(r.x);
-                                        double lift = ruleSup / (supports.get(mergedAntecedent) * supports.get(r.x));
-                                        RuleWithTransactions rule = new RuleWithTransactions(r.x, mergedAntecedent,
+                                        double confidence = ruleSup / supports.get(r.getX());
+                                        double lift = ruleSup / (supports.get(mergedAntecedent) * supports.get(r.getX()));
+                                        RuleWithTransactions rule = new RuleWithTransactions(r.getX(), mergedAntecedent,
                                                 inter, ruleSup, supportRatio, confidence, lift);
                                         rules.add(rule);
                                         if (Precision.compareTo(confidence, minConf, 0.0001) >= 0
@@ -345,12 +302,12 @@ public class KAPMiner {
                                         }
                                     }
                                 }
-                                if (ys.size() == level + 1 - r.y.size()) {
+                                if (ys.size() == level + 1 - r.getY().size()) {
                                     BitSet inter = new BitSet();
-                                    inter.or(ys.get(0).transactions);
+                                    inter.or(ys.get(0).getTransactions());
                                     for (int i1 = 1; i1 < ys.size(); i1++) {
                                         RuleWithTransactions rule = ys.get(i1);
-                                        inter.and(rule.transactions);
+                                        inter.and(rule.getTransactions());
                                     }
 
                                     double ruleSup = inter.cardinality() / noTransactions;
@@ -363,9 +320,9 @@ public class KAPMiner {
                                         }
 
                                         double ORconf = ruleSup / supports.get(mergeConsequents);
-                                        double lift = ruleSup / (supports.get(mergeConsequents) * supports.get(r.y));
+                                        double lift = ruleSup / (supports.get(mergeConsequents) * supports.get(r.getY()));
 
-                                        RuleWithTransactions rule = new RuleWithTransactions(mergeConsequents, r.y,
+                                        RuleWithTransactions rule = new RuleWithTransactions(mergeConsequents, r.getY(),
                                                 inter, ruleSup, supportRatio, ORconf, lift);
                                         rules.add(rule);
                                         if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
@@ -463,7 +420,7 @@ public class KAPMiner {
         Arrays.fill(union, Integer.MAX_VALUE);
         for (int i = 0; i < size; i++) {
             for (RuleWithTransactions rule : consequents) {
-                int cons = rule.y.get(i);
+                int cons = rule.getY().get(i);
                 if (cons < union[i]) {
                     union[i] = cons;
                 }
@@ -479,7 +436,7 @@ public class KAPMiner {
         // Arrays.fill(union, Integer.MAX_VALUE);
         for (int i = 0; i < size; i++) {
             for (RuleWithTransactions rule : antecedents) {
-                int cons = rule.x.get(i);
+                int cons = rule.getX().get(i);
                 if (cons < union[i] || union[i] == 0) {
                     union[i] = cons;
                 }
