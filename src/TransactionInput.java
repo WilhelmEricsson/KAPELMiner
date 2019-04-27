@@ -36,16 +36,10 @@ public class TransactionInput {
 
 
 
-    public static TransactionInput readTransactions(String file, boolean hasNoTimestamp) {
+    public static<T> TransactionInput readTransactions(T file, boolean noTimestamp) {
         Map<Integer, BitSet> items = new HashMap<>();
-
         IntObjectMap<ItemPosition> itemPosition = new IntObjectOpenHashMap<>();
-        List<List<Event>> transactions;
-        if (hasNoTimestamp) {
-            transactions = readSimpleEventTransactions(file);
-        } else {
-            transactions = readEventTransactions(file);
-        }
+        List<List<Event>> transactions = determineEventTransactionRead(file,noTimestamp);
 
         int transactionId = 0;
         for (List<Event> transaction : transactions) {
@@ -65,6 +59,23 @@ public class TransactionInput {
         }
         return new TransactionInput(items, transactions.size(), itemPosition);
     }
+
+    private static<T> List<List<Event>> determineEventTransactionRead(T file, boolean noTimestamp){
+        if(file instanceof String){
+            if (noTimestamp) {
+                return readSimpleEventTransactions((String)file);
+            } else {
+                return readEventTransactions((String)file);
+            }
+        }else{
+            if (noTimestamp) {
+                return readSimpleEventTransactions((List<String>)file);
+            } else {
+                return readEventTransactions((List<String>)file);
+            }
+        }
+    }
+
     private static List<List<Event>> readEventTransactions(String file) {
         Path path = Paths.get(file);
         try {
