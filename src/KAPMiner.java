@@ -1,18 +1,7 @@
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.*;
-
-
-
-import org.apache.commons.cli.*;
+import com.carrotsearch.hppc.IntObjectMap;
 import org.apache.commons.math3.util.Precision;
 
-import com.carrotsearch.hppc.IntObjectMap;
-import com.carrotsearch.hppc.IntObjectOpenHashMap;
+import java.util.*;
 
 /**
  * Created by isak on 2017-04-21.
@@ -36,8 +25,7 @@ public class KAPMiner {
         return intersection;
     }
 
-
-    private static List<Rule> findFrequent(TransactionInput transactionInput, double minSup, double minSupRatio, int orderConstraint, double minConf) {
+    public static List<Rule> findFrequent(TransactionInput transactionInput, double minSup, double minSupRatio, int orderConstraint, double minConf) {
         Map<Itemset, Double> supports = new HashMap<>();
         IntObjectMap<ItemPosition> itemPositionMap = transactionInput.getItemPositions();
         double noTransactions = transactionInput.getTransactions();
