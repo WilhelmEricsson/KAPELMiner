@@ -2,6 +2,7 @@ import org.apache.commons.cli.*;
 
 import java.io.FileOutputStream;
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -35,8 +36,11 @@ public class ExtKAPELMiner {
                 throw new RuntimeException("no input");
             }
 
-            partitionData(file);
-            TransactionInput transactionInput = TransactionInput.readTransactions(file, !cmd.hasOption("time"));
+            HashMap<Integer, List<String>> partitions = partitionData(file);
+            List<TransactionInput> partitionsTransactionInput = new ArrayList<>();
+            for(int i = 0; i < partitions.size(); i++){
+                partitionsTransactionInput.add(TransactionInput.readTransactions(partitions.get(i), !cmd.hasOption("time")));
+            }
 
             double minSup = Double.parseDouble(cmd.getOptionValue("minSup", "0.1"));
             double minSupRatio = Double.parseDouble(cmd.getOptionValue("minSupRatio", "0.0"));
@@ -44,9 +48,16 @@ public class ExtKAPELMiner {
             int orderConstraint = Integer.parseInt(cmd.getOptionValue("delta", "1"));
 
             long start = System.currentTimeMillis();
+            List<List<Rule>> partitionRules = new ArrayList<>();
+            for(int i = 0; i < partitions.size(); i++){
+
+                //Här ska trådarna startas
+                partitionRules.add(KAPMiner.findFrequent(partitionsTransactionInput.get(i), minSup, minSupRatio, orderConstraint, minConf));
 
 
-            List<Rule> rules = KAPMiner.findFrequent(transactionInput, minSup, minSupRatio, orderConstraint, minConf);
+            }
+                //Här ska mergen ske
+
 
             String output = cmd.getOptionValue("output", "<std>");
             PrintStream out;
@@ -55,17 +66,19 @@ public class ExtKAPELMiner {
             } else {
                 out = new PrintStream(new FileOutputStream(output));
             }
-           System.err.printf("Found %d rules in %d ms with %.4f MB memory %n", rules.size(),
-                    System.currentTimeMillis() - start,
-                    (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024.0
-                            / 1024.0);
-            out.printf("Rule, support, supportRatio, conf, lift%n");
-            rules.stream().sorted(Comparator.comparing(Rule::getSupport).reversed()).forEach(rule -> {
-                out.printf("\"%s => %s\",%f,%f,%f,%f%n", rule.getX(), rule.getY(), rule.getSupport(),
-                        rule.getSupportRatio(), rule.getConfidence(), rule.getLift());
-            });
+            for(List<Rule>rules: partitionRules) {
+                System.err.printf("Found %d rules in %d ms with %.4f MB memory %n", rules.size(),
+                        System.currentTimeMillis() - start,
+                        (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024.0
+                                / 1024.0);
+                out.printf("Rule, support, supportRatio, conf, lift%n");
+                rules.stream().sorted(Comparator.comparing(Rule::getSupport).reversed()).forEach(rule -> {
+                    out.printf("\"%s => %s\",%f,%f,%f,%f%n", rule.getX(), rule.getY(), rule.getSupport(),
+                            rule.getSupportRatio(), rule.getConfidence(), rule.getLift());
+                });
 
-            out.flush();
+                out.flush();
+            }
         } catch (Exception e) {
             e.printStackTrace();
             HelpFormatter formatter = new HelpFormatter();
@@ -79,7 +92,7 @@ public class ExtKAPELMiner {
 
     private static HashMap<Integer, List<String>> partitionData(String file){
         //TEMP hårdkodat hur många partitions
-        return TransactionInput.partitionTransactions(file, Runtime.getRuntime().availableProcessors()/2);
+        return TransactionInput.partitionTransactions(file, Runtime.getRuntime().availableProcessors()/8);
     }
 
 
