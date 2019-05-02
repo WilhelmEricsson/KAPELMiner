@@ -2,14 +2,31 @@ import com.carrotsearch.hppc.IntObjectMap;
 import org.apache.commons.math3.util.Precision;
 
 import java.util.*;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by isak on 2017-04-21.
  */
 
-public class KAPMiner {
+public class KAPMiner implements Callable<List<Rule>>{
 
-    public static BitSet intersection(BitSet a, BitSet b) {
+
+    private TransactionInput input;
+    private double minSup, minSupRatio, minConf;
+    private int orderConstraint;
+
+    public KAPMiner(TransactionInput input, double minSup, double minSupRatio, double minConf, int orderConstraint) {
+        this.input = input;
+        this.minSup = minSup;
+        this.minSupRatio = minSupRatio;
+        this.minConf = minConf;
+        this.orderConstraint = orderConstraint;
+
+    }
+
+
+    public BitSet intersection(BitSet a, BitSet b) {
         BitSet clone;
         BitSet and;
         if (a.size() < b.size()) {
@@ -25,7 +42,10 @@ public class KAPMiner {
         return intersection;
     }
 
-    public static List<Rule> findFrequent(TransactionInput transactionInput, double minSup, double minSupRatio, int orderConstraint, double minConf) {
+    public List<Rule> findFrequent(){
+        return findFrequent(input,minSup,minSupRatio,orderConstraint,minConf);
+    }
+    public List<Rule> findFrequent(TransactionInput transactionInput, double minSup, double minSupRatio, int orderConstraint, double minConf) {
         Map<Itemset, Double> supports = new HashMap<>();
         IntObjectMap<ItemPosition> itemPositionMap = transactionInput.getItemPositions();
         double noTransactions = transactionInput.getTransactions();
@@ -146,7 +166,8 @@ public class KAPMiner {
                                         rules.add(rule);
                                         if (Precision.compareTo(confidence, minConf, 0.0001) >= 0
                                                 && supportRatio >= minSupRatio) {
-                                            outputRules.add(new Rule(rule));
+                                            Rule temp = new Rule(rule);
+                                            outputRules.add(temp);
                                         }
                                     }
                                 }
@@ -245,7 +266,7 @@ public class KAPMiner {
         return outputRules;
     }
 
-    private static BitSet itemIntersect(int orderConstraint, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions, int itemA, int itemB) {
+    private BitSet itemIntersect(int orderConstraint, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions, int itemA, int itemB) {
         BitSet beforeIntersection = new BitSet();
         for (int transactionId =
              intersectingTransactions.nextSetBit(0); transactionId >= 0; transactionId =
@@ -261,7 +282,7 @@ public class KAPMiner {
         return beforeIntersection;
     }
 
-    private static Itemset mergeAntecedents(List<RuleWithTransactions> consequents, int size) {
+    private Itemset mergeAntecedents(List<RuleWithTransactions> consequents, int size) {
         int[] union = new int[size + 1];
         Arrays.fill(union, Integer.MAX_VALUE);
         for (int i = 0; i < size; i++) {
@@ -277,7 +298,7 @@ public class KAPMiner {
         return new Itemset(union);
     }
 
-    private static Itemset mergeConsequents(List<RuleWithTransactions> antecedents, int size) {
+    private Itemset mergeConsequents(List<RuleWithTransactions> antecedents, int size) {
         int[] union = new int[size + 1];
         // Arrays.fill(union, Integer.MAX_VALUE);
         for (int i = 0; i < size; i++) {
@@ -293,4 +314,8 @@ public class KAPMiner {
         return new Itemset(union);
     }
 
+    @Override
+    public List<Rule> call() throws Exception {
+        return findFrequent(input, minSup, minSupRatio, orderConstraint, minConf);
+    }
 }

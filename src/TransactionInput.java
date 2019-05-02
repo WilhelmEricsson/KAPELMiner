@@ -14,11 +14,15 @@ public class TransactionInput {
 
 
     public TransactionInput(Map<Integer, BitSet> itemSets, double transactions,IntObjectMap<ItemPosition> itemPositions) {
-        this.itemSets = itemSets;
+        this.itemSets = new HashMap<>(itemSets);
         this.transactions = transactions;
         this.itemPositions = itemPositions;
     }
-
+    public TransactionInput(TransactionInput other){
+        this.itemSets = other.itemSets;
+        this.transactions = other.transactions;
+        this.itemPositions = new IntObjectOpenHashMap<>(other.itemPositions);
+    }
 
 
     public double getTransactions() {
