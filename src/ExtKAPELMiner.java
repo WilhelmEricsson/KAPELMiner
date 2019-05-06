@@ -41,7 +41,7 @@ public class ExtKAPELMiner {
 
 
             //NUMBER OF PARTITIONS
-            numOfPartitions = Runtime.getRuntime().availableProcessors();
+            numOfPartitions = Runtime.getRuntime().availableProcessors() ;
 
             HashMap<Integer, List<String>> partitions = partitionData(file,numOfPartitions);
             List<TransactionInput> partitionsTransactionInput = new ArrayList<>();
@@ -170,7 +170,7 @@ public class ExtKAPELMiner {
 
 
                 // om inte minSup mm delas på antalet partitions så blir resultatet missvisande, dock blir antalet kandidatregler för många vilket slöar ner allt.
-                List<Rule> rules = (new KAPMiner(partitionsTransactionInput, minSup/numOfPartitions, minSupRatio/numOfPartitions, minConf/numOfPartitions,orderConstraint)).findFrequent();
+                List<Rule> rules = (new KAPMiner(partitionsTransactionInput, minSup/2.0, minSupRatio/2.0, minConf/2.0,orderConstraint)).findFrequent();
                 long end = System.currentTimeMillis() - start;
                 System.out.println("Part: " +  partition + " time: " + end +" ms NUMofRUlES: " + rules.size());
 

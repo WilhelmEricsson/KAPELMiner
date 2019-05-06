@@ -1,15 +1,15 @@
 import com.carrotsearch.hppc.IntObjectMap;
 import org.apache.commons.math3.util.Precision;
 
+
 import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentHashMap;
+
 
 /**
  * Created by isak on 2017-04-21.
  */
 
-public class KAPMiner implements Callable<List<Rule>>{
+public class KAPMiner{
 
 
     private TransactionInput input;
@@ -51,14 +51,8 @@ public class KAPMiner implements Callable<List<Rule>>{
         double noTransactions = transactionInput.getTransactions();
 
 
-        List<ItemsetWithTransactions> currentLevel = new ArrayList<>();
-        for (Map.Entry<Integer, BitSet> kv : transactionInput.getItemSets().entrySet()) {
-            if (kv.getValue().cardinality() / noTransactions >= minSup) {
-                Itemset item = new Itemset(new int[] {kv.getKey()});
-                currentLevel.add(new ItemsetWithTransactions(item, kv.getValue()));
-                supports.put(item, kv.getValue().cardinality() / noTransactions);
-            }
-        }
+        List<ItemsetWithTransactions> currentLevel = initialSupportCalculation(transactionInput,noTransactions,supports);
+
 
         List<Rule> outputRules = new ArrayList<>();
         List<ItemsetWithTransactions> nextLevel = new ArrayList<>();
@@ -68,7 +62,11 @@ public class KAPMiner implements Callable<List<Rule>>{
 
         int level = 1;
         while (true) {
+
             for (int i = 0; i < currentLevel.size(); i++) {
+
+
+
                 List<RuleWithTransactions> matches = new ArrayList<>();
                 for (int j = i + 1; j < currentLevel.size(); j++) {
                     ItemsetWithTransactions iItem = currentLevel.get(i);
@@ -94,149 +92,11 @@ public class KAPMiner implements Callable<List<Rule>>{
                             matches.addAll(jItemRules);
                         }
                         List<RuleWithTransactions> rules = new ArrayList<>();
+
                         if (level > 1) {
-                            int[] tmpItemSet = new int[newItemset.size() - 1];
-                            for (int k = newItemset.size() - 3; k >= 0; k--) {
-                                int tmpCnt = 0;
-                                for (int l = 0; l < newItemset.size(); l++) {
-                                    if (k != l) {
-                                        tmpItemSet[tmpCnt++] = newItemset.get(l);
-                                    }
-                                }
-
-                                List<RuleWithTransactions> ruleWithTransactions =
-                                        prevLevelMap.get(new Itemset(tmpItemSet));
-                                if (ruleWithTransactions != null) {
-                                    matches.addAll(ruleWithTransactions);
-                                }
-                            }
-
-                            Set<Itemset> usedX = new HashSet<>();
-                            Set<Itemset> usedY = new HashSet<>();
-                            for (int k = 0; k < matches.size(); k++) {
-                                List<RuleWithTransactions> xs = new ArrayList<>();
-                                List<RuleWithTransactions> ys = new ArrayList<>();
-
-                                RuleWithTransactions r = matches.get(k);
-                                boolean checkedX = usedX.contains(r.getX());
-                                boolean checkedY = usedY.contains(r.getY());
-
-
-                                if (!checkedX) {
-                                    xs.add(r);
-                                    usedX.add(r.getX());
-                                }
-
-                                if (!checkedY) {
-                                    ys.add(r);
-                                    usedY.add(r.getY());
-                                }
-
-                                for (int l = k + 1; l < matches.size(); l++) {
-                                    RuleWithTransactions o = matches.get(l);
-                                    if (!checkedX && o.getX().equals(r.getX())) {
-                                        xs.add(o);
-                                    }
-                                    if (!checkedY && o.getY().equals(r.getY())) {
-                                        ys.add(o);
-                                    }
-                                }
-
-                                // If the number of itemsets to merge for the y
-                                if (xs.size() == level + 1 - r.getX().size()) {
-                                    BitSet inter = new BitSet();
-                                    inter.or(xs.get(0).getTransactions());
-                                    for (int i1 = 1; i1 < xs.size(); i1++) {
-                                        RuleWithTransactions rule = xs.get(i1);
-                                        inter.and(rule.getTransactions());
-                                    }
-
-                                    double ruleSup = inter.cardinality() / noTransactions;
-                                    if (ruleSup >= minSup) {
-                                        double supportRatio =
-                                                inter.cardinality() / (double) intersectingTransactions.cardinality();
-                                        Itemset mergedAntecedent = mergeAntecedents(xs, xs.size() - 1);
-                                        if (usedY.contains(mergedAntecedent)) {
-                                            continue;
-                                        }
-                                        double confidence = ruleSup / supports.get(r.getX());
-                                        double lift = ruleSup / (supports.get(mergedAntecedent) * supports.get(r.getX()));
-                                        RuleWithTransactions rule = new RuleWithTransactions(r.getX(), mergedAntecedent,
-                                                inter, ruleSup, supportRatio, confidence, lift);
-                                        rules.add(rule);
-                                        if (Precision.compareTo(confidence, minConf, 0.0001) >= 0
-                                                && supportRatio >= minSupRatio) {
-                                            Rule temp = new Rule(rule);
-                                            outputRules.add(temp);
-                                        }
-                                    }
-                                }
-                                if (ys.size() == level + 1 - r.getY().size()) {
-                                    BitSet inter = new BitSet();
-                                    inter.or(ys.get(0).getTransactions());
-                                    for (int i1 = 1; i1 < ys.size(); i1++) {
-                                        RuleWithTransactions rule = ys.get(i1);
-                                        inter.and(rule.getTransactions());
-                                    }
-
-                                    double ruleSup = inter.cardinality() / noTransactions;
-                                    if (ruleSup >= minSup) {
-                                        double supportRatio =
-                                                inter.cardinality() / (double) intersectingTransactions.cardinality();
-                                        Itemset mergeConsequents = mergeConsequents(ys, ys.size() - 1);
-                                        if (usedX.contains(mergeConsequents)) {
-                                            continue;
-                                        }
-
-                                        double ORconf = ruleSup / supports.get(mergeConsequents);
-                                        double lift = ruleSup / (supports.get(mergeConsequents) * supports.get(r.getY()));
-
-                                        RuleWithTransactions rule = new RuleWithTransactions(mergeConsequents, r.getY(),
-                                                inter, ruleSup, supportRatio, ORconf, lift);
-                                        rules.add(rule);
-                                        if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
-                                                && supportRatio >= minSupRatio) {
-                                            outputRules.add(new Rule(rule));
-                                        }
-
-                                    }
-                                }
-                            }
+                           extractRules(level, noTransactions,supports,intersectingTransactions,rules,outputRules,prevLevelMap,matches,newItemset);
                         } else {
-                            List<ItemsetWithTransactions> matches2 = new ArrayList<>();
-                            matches2.add(iItem);
-                            matches2.add(jItem);
-                            for (int k = 0; k < matches2.size(); k++) {
-                                ItemsetWithTransactions kOrder = matches2.get(k);
-                                ItemsetWithTransactions mOrder = null;
-                                for (int m = 0; m < matches2.size(); m++) {
-                                    if (m == k) {
-                                        continue;
-                                    }
-                                    mOrder = matches2.get(m);
-                                }
-                                int itemA = kOrder.getItemSet().get(0);
-                                int itemB = mOrder.getItemSet().get(0);
-
-                                BitSet beforeIntersection = itemIntersect(orderConstraint, itemPositionMap,
-                                        intersectingTransactions, itemA, itemB);
-
-                                double ruleSup = beforeIntersection.cardinality() / noTransactions;
-                                if (ruleSup >= minSup) {
-                                    double supportRatio = beforeIntersection.cardinality()
-                                            / (double) intersectingTransactions.cardinality();
-                                    double ORconf = ruleSup / supports.get(kOrder.getItemSet());
-                                    double lift = ruleSup
-                                            / (supports.get(kOrder.getItemSet()) * supports.get(mOrder.getItemSet()));
-                                    RuleWithTransactions rule = new RuleWithTransactions(kOrder.getItemSet(),
-                                            mOrder.getItemSet(), beforeIntersection, ruleSup, supportRatio, ORconf, lift);
-                                    rules.add(rule);
-                                    if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
-                                            && supportRatio >= minSupRatio) {
-                                        outputRules.add(new Rule(rule));
-                                    }
-                                }
-                            }
+                           extractFirstLevelRules(iItem, jItem, itemPositionMap, intersectingTransactions, noTransactions, supports, rules, outputRules);
                         }
 
                         nextLevel.add(new ItemsetWithTransactions(newItemset, intersectingTransactions));
@@ -265,6 +125,181 @@ public class KAPMiner implements Callable<List<Rule>>{
         }
         return outputRules;
     }
+
+    private ArrayList<ItemsetWithTransactions> initialSupportCalculation(TransactionInput transactionInput, double noTransactions, Map<Itemset, Double> supports){
+        ArrayList<ItemsetWithTransactions> tempLevel = new ArrayList<>();
+
+        for (Map.Entry<Integer, BitSet> kv : transactionInput.getItemSets().entrySet()) {
+            if (kv.getValue().cardinality() / noTransactions >= minSup) {
+                Itemset item = new Itemset(new int[] {kv.getKey()});
+                tempLevel.add(new ItemsetWithTransactions(item, kv.getValue()));
+                supports.put(item, kv.getValue().cardinality() / noTransactions);
+            }
+        }
+
+
+        return tempLevel;
+    }
+
+    private void extractFirstLevelRules(ItemsetWithTransactions iItem, ItemsetWithTransactions jItem, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions,
+                                        double noTransactions, Map<Itemset, Double> supports, List<RuleWithTransactions> rules, List<Rule> outputRules){
+        List<ItemsetWithTransactions> matches2 = new ArrayList<>();
+
+        matches2.add(iItem);
+        matches2.add(jItem);
+        for (int k = 0; k < matches2.size(); k++) {
+            ItemsetWithTransactions kOrder = matches2.get(k);
+            ItemsetWithTransactions mOrder = null;
+            for (int m = 0; m < matches2.size(); m++) {
+                if (m == k) {
+                    continue;
+                }
+                mOrder = matches2.get(m);
+            }
+            int itemA = kOrder.getItemSet().get(0);
+            int itemB = mOrder.getItemSet().get(0);
+
+
+            BitSet beforeIntersection = itemIntersect(orderConstraint, itemPositionMap,
+                    intersectingTransactions, itemA, itemB);
+
+
+            double ruleSup = beforeIntersection.cardinality() / noTransactions;
+            if (ruleSup >= minSup) {
+                double supportRatio = beforeIntersection.cardinality()
+                        / (double) intersectingTransactions.cardinality();
+
+                double ORconf = ruleSup / supports.get(kOrder.getItemSet());
+                double lift = ruleSup
+                        / (supports.get(kOrder.getItemSet()) * supports.get(mOrder.getItemSet()));
+                RuleWithTransactions rule = new RuleWithTransactions(kOrder.getItemSet(),
+                        mOrder.getItemSet(), beforeIntersection, ruleSup, supportRatio, ORconf, lift);
+                rules.add(rule);
+                if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
+                        && supportRatio >= minSupRatio) {
+                    outputRules.add(new Rule(rule));
+                }
+            }
+        }
+    }
+
+    private void extractRules(int level, double noTransactions,  Map<Itemset, Double> supports, BitSet intersectingTransactions, List<RuleWithTransactions> rules,
+                              List<Rule> outputRules, Map<Itemset, List<RuleWithTransactions>> prevLevelMap, List<RuleWithTransactions> matches, Itemset newItemset ){
+        int[] tmpItemSet = new int[newItemset.size() - 1];
+        for (int k = newItemset.size() - 3; k >= 0; k--) {
+            int tmpCnt = 0;
+            for (int l = 0; l < newItemset.size(); l++) {
+                if (k != l) {
+                    tmpItemSet[tmpCnt++] = newItemset.get(l);
+                }
+            }
+
+            List<RuleWithTransactions> ruleWithTransactions =
+                    prevLevelMap.get(new Itemset(tmpItemSet));
+            if (ruleWithTransactions != null) {
+                matches.addAll(ruleWithTransactions);
+            }
+        }
+
+        Set<Itemset> usedX = new HashSet<>();
+        Set<Itemset> usedY = new HashSet<>();
+        for (int k = 0; k < matches.size(); k++) {
+            List<RuleWithTransactions> xs = new ArrayList<>();
+            List<RuleWithTransactions> ys = new ArrayList<>();
+
+            RuleWithTransactions r = matches.get(k);
+            boolean checkedX = usedX.contains(r.getX());
+            boolean checkedY = usedY.contains(r.getY());
+
+
+            if (!checkedX) {
+                xs.add(r);
+                usedX.add(r.getX());
+            }
+
+            if (!checkedY) {
+                ys.add(r);
+                usedY.add(r.getY());
+            }
+
+            for (int l = k + 1; l < matches.size(); l++) {
+                RuleWithTransactions o = matches.get(l);
+                if (!checkedX && o.getX().equals(r.getX())) {
+                    xs.add(o);
+                }
+                if (!checkedY && o.getY().equals(r.getY())) {
+                    ys.add(o);
+                }
+            }
+
+            // If the number of itemsets to merge for the y
+            if (xs.size() == level + 1 - r.getX().size()) {
+                BitSet inter = new BitSet();
+                inter.or(xs.get(0).getTransactions());
+                for (int i1 = 1; i1 < xs.size(); i1++) {
+                    RuleWithTransactions rule = xs.get(i1);
+                    inter.and(rule.getTransactions());
+                }
+
+                double ruleSup = inter.cardinality() / noTransactions;
+                if (ruleSup >= minSup) {
+                    double supportRatio =
+                            inter.cardinality() / (double) intersectingTransactions.cardinality();
+                    Itemset mergedAntecedent = mergeAntecedents(xs, xs.size() - 1);
+                    if (usedY.contains(mergedAntecedent)) {
+                        continue;
+                    }
+                    double confidence = ruleSup / supports.get(r.getX());
+                    double lift = ruleSup / (supports.get(mergedAntecedent) * supports.get(r.getX()));
+                    RuleWithTransactions rule = new RuleWithTransactions(r.getX(), mergedAntecedent,
+                            inter, ruleSup, supportRatio, confidence, lift);
+                    rules.add(rule);
+                    if (Precision.compareTo(confidence, minConf, 0.0001) >= 0
+                            && supportRatio >= minSupRatio) {
+                        Rule temp = new Rule(rule);
+                        outputRules.add(temp);
+                    }
+                }
+            }
+            if (ys.size() == level + 1 - r.getY().size()) {
+                BitSet inter = new BitSet();
+                inter.or(ys.get(0).getTransactions());
+                for (int i1 = 1; i1 < ys.size(); i1++) {
+                    RuleWithTransactions rule = ys.get(i1);
+                    inter.and(rule.getTransactions());
+                }
+
+                double ruleSup = inter.cardinality() / noTransactions;
+                if (ruleSup >= minSup) {
+                    double supportRatio =
+                            inter.cardinality() / (double) intersectingTransactions.cardinality();
+                    Itemset mergeConsequents = mergeConsequents(ys, ys.size() - 1);
+                    if (usedX.contains(mergeConsequents)) {
+                        continue;
+                    }
+
+                    double ORconf = ruleSup / supports.get(mergeConsequents);
+                    double lift = ruleSup / (supports.get(mergeConsequents) * supports.get(r.getY()));
+
+                    RuleWithTransactions rule = new RuleWithTransactions(mergeConsequents, r.getY(),
+                            inter, ruleSup, supportRatio, ORconf, lift);
+                    rules.add(rule);
+                    if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
+                            && supportRatio >= minSupRatio) {
+                        outputRules.add(new Rule(rule));
+                    }
+
+                }
+            }
+        }
+    }
+    private void checkXs(){
+
+    }
+    private void checkYs(){
+
+    }
+
 
     private BitSet itemIntersect(int orderConstraint, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions, int itemA, int itemB) {
         BitSet beforeIntersection = new BitSet();
@@ -313,9 +348,5 @@ public class KAPMiner implements Callable<List<Rule>>{
         }
         return new Itemset(union);
     }
-
-    @Override
-    public List<Rule> call() throws Exception {
-        return findFrequent(input, minSup, minSupRatio, orderConstraint, minConf);
-    }
+    
 }
