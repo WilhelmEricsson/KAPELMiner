@@ -10,13 +10,13 @@ import java.util.*;
  */
 
 public class KAPMiner{
-
     private TransactionInput input;
     private double minSup, minSupRatio, minConf;
     private int orderConstraint, level;
     private Map<Itemset, Double> supports;
     private Map<Itemset, List<RuleWithTransactions>> currentLevelMap, prevLevelMap;
     private List<ItemsetWithTransactions> currentLevel, nextLevel;
+    private List<Rule> outputRules;
 
     public KAPMiner(TransactionInput input, double minSup, double minSupRatio, double minConf, int orderConstraint) {
         this.input = input;
@@ -51,14 +51,15 @@ public class KAPMiner{
     public List<Rule> findFrequent(TransactionInput transactionInput, double minSup, double minSupRatio, int orderConstraint, double minConf) {
 
         double noTransactions = transactionInput.getTransactions();
-        List<Rule> outputRules = new ArrayList<>();
         IntObjectMap<ItemPosition> itemPositionMap = transactionInput.getItemPositions();
-
         supports = new HashMap<>();
         currentLevelMap = new HashMap<>();
         prevLevelMap = new HashMap<>();
         nextLevel = new ArrayList<>();
-        currentLevel = initialSupportCalculation(transactionInput,noTransactions);
+        currentLevel = new ArrayList<>();
+        outputRules = new ArrayList<>();
+        initialSupportCalculation(transactionInput,noTransactions);
+
         level = 1;
 
         while (true) {
@@ -73,7 +74,7 @@ public class KAPMiner{
         }
         return outputRules;
     }
-    private void prepareNextLevel(){
+    protected void prepareNextLevel(){
         currentLevel.clear();
         List<ItemsetWithTransactions> tmp = currentLevel;
         currentLevel = nextLevel;
@@ -86,23 +87,19 @@ public class KAPMiner{
         level += 1;
     }
 
-    private ArrayList<ItemsetWithTransactions> initialSupportCalculation(TransactionInput transactionInput, double noTransactions){
-        ArrayList<ItemsetWithTransactions> tempLevel = new ArrayList<>();
+    protected void initialSupportCalculation(TransactionInput transactionInput, double noTransactions){
 
         for (Map.Entry<Integer, BitSet> kv : transactionInput.getItemSets().entrySet()) {
             if (kv.getValue().cardinality() / noTransactions >= minSup) {
                 Itemset item = new Itemset(new int[] {kv.getKey()});
-                tempLevel.add(new ItemsetWithTransactions(item, kv.getValue()));
+                currentLevel.add(new ItemsetWithTransactions(item, kv.getValue()));
                 supports.put(item, kv.getValue().cardinality() / noTransactions);
             }
         }
-
-
-        return tempLevel;
     }
 
-    private  void extractRules(int level, double noTransactions, int compIndex, List<ItemsetWithTransactions> currentLevel, List<ItemsetWithTransactions> nextLevel,
-                               List<Rule> outputRules, IntObjectMap<ItemPosition> itemPositionMap){
+    protected void extractRules(int level, double noTransactions, int compIndex, List<ItemsetWithTransactions> currentLevel, List<ItemsetWithTransactions> nextLevel,
+                                List<Rule> outputRules, IntObjectMap<ItemPosition> itemPositionMap){
 
         List<RuleWithTransactions> matches = new ArrayList<>();
         for (int j = compIndex + 1; j < currentLevel.size(); j++) {
@@ -144,7 +141,7 @@ public class KAPMiner{
         }
     }
 
-    private void extractFirstLevelRules(ItemsetWithTransactions iItem, ItemsetWithTransactions jItem, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions,
+    protected void extractFirstLevelRules(ItemsetWithTransactions iItem, ItemsetWithTransactions jItem, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions,
                                         double noTransactions, Map<Itemset, Double> supports, List<RuleWithTransactions> rules, List<Rule> outputRules){
         List<ItemsetWithTransactions> matches2 = new ArrayList<>();
 
@@ -180,13 +177,13 @@ public class KAPMiner{
                 rules.add(rule);
                 if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
                         && supportRatio >= minSupRatio) {
-                    outputRules.add(new Rule(rule));
+                    addToOutputRules(new Rule(rule));
                 }
             }
         }
     }
 
-    private void extractHigherLevelRules(int level, double noTransactions,  Map<Itemset, Double> supports, BitSet intersectingTransactions, List<RuleWithTransactions> rules,
+    protected void extractHigherLevelRules(int level, double noTransactions,  Map<Itemset, Double> supports, BitSet intersectingTransactions, List<RuleWithTransactions> rules,
                               List<Rule> outputRules, Map<Itemset, List<RuleWithTransactions>> prevLevelMap, List<RuleWithTransactions> matches, Itemset newItemset ){
         int[] tmpItemSet = new int[newItemset.size() - 1];
         for (int k = newItemset.size() - 3; k >= 0; k--) {
@@ -197,8 +194,8 @@ public class KAPMiner{
                 }
             }
 
-            List<RuleWithTransactions> ruleWithTransactions =
-                    prevLevelMap.get(new Itemset(tmpItemSet));
+            List<RuleWithTransactions> ruleWithTransactions = prevLevelMap.get(new Itemset(tmpItemSet));
+
             if (ruleWithTransactions != null) {
                 matches.addAll(ruleWithTransactions);
             }
@@ -238,13 +235,8 @@ public class KAPMiner{
             // If the number of itemsets to merge for the y
             if (xs.size() == level + 1 - r.getX().size()) {
                 BitSet inter = new BitSet();
-                inter.or(xs.get(0).getTransactions());
-                for (int i1 = 1; i1 < xs.size(); i1++) {
-                    RuleWithTransactions rule = xs.get(i1);
-                    inter.and(rule.getTransactions());
-                }
+                double ruleSup = ruleInterSupport(inter, xs, noTransactions);
 
-                double ruleSup = inter.cardinality() / noTransactions;
                 if (ruleSup >= minSup) {
                     double supportRatio =
                             inter.cardinality() / (double) intersectingTransactions.cardinality();
@@ -260,19 +252,14 @@ public class KAPMiner{
                     if (Precision.compareTo(confidence, minConf, 0.0001) >= 0
                             && supportRatio >= minSupRatio) {
                         Rule temp = new Rule(rule);
-                        outputRules.add(temp);
+                        addToOutputRules(temp);
                     }
                 }
             }
             if (ys.size() == level + 1 - r.getY().size()) {
                 BitSet inter = new BitSet();
-                inter.or(ys.get(0).getTransactions());
-                for (int i1 = 1; i1 < ys.size(); i1++) {
-                    RuleWithTransactions rule = ys.get(i1);
-                    inter.and(rule.getTransactions());
-                }
+                double ruleSup = ruleInterSupport(inter,ys,noTransactions);
 
-                double ruleSup = inter.cardinality() / noTransactions;
                 if (ruleSup >= minSup) {
                     double supportRatio =
                             inter.cardinality() / (double) intersectingTransactions.cardinality();
@@ -289,15 +276,25 @@ public class KAPMiner{
                     rules.add(rule);
                     if (Precision.compareTo(rule.getORconf(), minConf, 0.0001) >= 0
                             && supportRatio >= minSupRatio) {
-                        outputRules.add(new Rule(rule));
+                        addToOutputRules(new Rule(rule));
                     }
 
                 }
             }
         }
     }
+    protected double ruleInterSupport(BitSet inter, List<RuleWithTransactions> xsys, double noTransactions){
+        inter.or(xsys.get(0).getTransactions());
+        for (int i1 = 1; i1 < xsys.size(); i1++) {
+            RuleWithTransactions rule = xsys.get(i1);
+            inter.and(rule.getTransactions());
+        }
+        return inter.cardinality() / noTransactions;
+    }
 
-
+    protected void addToOutputRules(Rule rule){
+        outputRules.add(rule);
+    }
 
     private BitSet itemIntersect(int orderConstraint, IntObjectMap<ItemPosition> itemPositionMap, BitSet intersectingTransactions, int itemA, int itemB) {
         BitSet beforeIntersection = new BitSet();
@@ -346,5 +343,63 @@ public class KAPMiner{
         }
         return new Itemset(union);
     }
-    
+
+    /*
+    SETTERS and GETTERS MAINLY USED BY SUB-CLASS
+     */
+    public void setSupports(Map<Itemset, Double> supports) {
+        this.supports = supports;
+    }
+    public void setCurrentLevelMap(Map<Itemset, List<RuleWithTransactions>> currentLevelMap) {
+        this.currentLevelMap = currentLevelMap;
+    }
+    public void setPrevLevelMap(Map<Itemset, List<RuleWithTransactions>> prevLevelMap) {
+        this.prevLevelMap = prevLevelMap;
+    }
+    public void setCurrentLevel(List<ItemsetWithTransactions> currentLevel) {
+        this.currentLevel = currentLevel;
+    }
+    public void setNextLevel(List<ItemsetWithTransactions> nextLevel) {
+        this.nextLevel = nextLevel;
+    }
+    public void setOutputRules(List<Rule> outputRules){ this.outputRules = outputRules;}
+    public void setLevel(int level){this.level = level;}
+
+    public int getLevel() {
+        return level;
+    }
+    public Map<Itemset, Double> getSupports() {
+        return supports;
+    }
+    public Map<Itemset, List<RuleWithTransactions>> getCurrentLevelMap() {
+        return currentLevelMap;
+    }
+    public Map<Itemset, List<RuleWithTransactions>> getPrevLevelMap() {
+        return prevLevelMap;
+    }
+    public List<ItemsetWithTransactions> getCurrentLevel() {
+        return currentLevel;
+    }
+    public List<ItemsetWithTransactions> getNextLevel() {
+        return nextLevel;
+    }
+    public List<Rule> getOutputRules() {
+        return outputRules;
+    }
+    public TransactionInput getInput() {
+        return input;
+    }
+    public double getMinSup() {
+        return minSup;
+    }
+    public double getMinSupRatio() {
+        return minSupRatio;
+    }
+    public double getMinConf() {
+        return minConf;
+    }
+    public int getOrderConstraint() {
+        return orderConstraint;
+    }
+
 }

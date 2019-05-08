@@ -70,7 +70,7 @@ public class ExtKAPELMiner {
             es.shutdown();
 
             try{
-                finished = es.awaitTermination(100000, TimeUnit.MILLISECONDS);
+                finished = es.awaitTermination(1000000, TimeUnit.MILLISECONDS);
             }catch(InterruptedException ie){
                 System.err.println(ie.getMessage());
             }
@@ -170,7 +170,7 @@ public class ExtKAPELMiner {
 
 
                 // om inte minSup mm delas på antalet partitions så blir resultatet missvisande, dock blir antalet kandidatregler för många vilket slöar ner allt.
-                List<Rule> rules = (new KAPMiner(partitionsTransactionInput, minSup, minSupRatio, minConf,orderConstraint)).findFrequent();
+                List<Rule> rules = (new IntKAPELMiner(partitionsTransactionInput, minSup, minSupRatio, minConf,orderConstraint, 4)).findFrequent();
                 long end = System.currentTimeMillis() - start;
                 System.out.println("Part: " +  partition + " time: " + end +" ms NUMofRUlES: " + rules.size());
 
